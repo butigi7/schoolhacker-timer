@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 function App() {
-  const [duration, setDuration] = useState(0); // 분 단위
+  const [duration, setDuration] = useState(0); // 초 단위
   const [timeLeft, setTimeLeft] = useState(0); // 초 단위
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -16,7 +16,7 @@ function App() {
 
   const formatTime = (seconds) => {
     const m = String(Math.floor(seconds / 60)).padStart(2, '0');
-    const s = String(Math.floor(seconds % 60)).padStart(2, '0');
+    const s = String(seconds % 60).padStart(2, '0');
     return `${m}:${s}`;
   };
 
@@ -57,7 +57,7 @@ function App() {
       ctx.moveTo(cx, cy);
       ctx.arc(cx, cy, radius, startAngle, currentEnd);
       ctx.closePath();
-      ctx.fillStyle = '#ff4444';
+      ctx.fillStyle = isPaused ? '#aa2222' : '#ff4444';
       ctx.fill();
     }
   };
@@ -66,7 +66,7 @@ function App() {
     if (!startTimestamp.current) startTimestamp.current = timestamp;
 
     const elapsed = (timestamp - startTimestamp.current + pausedElapsed.current) / 1000;
-    const totalSeconds = duration * 60;
+    const totalSeconds = duration;
     const remaining = Math.max(totalSeconds - elapsed, 0);
     setTimeLeft(remaining);
 
@@ -85,7 +85,7 @@ function App() {
     if (duration <= 0 || isRunning) return;
     setIsRunning(true);
     setIsPaused(false);
-    setTimeLeft(duration * 60);
+    setTimeLeft(duration);
     pausedElapsed.current = 0;
     startTimestamp.current = null;
     requestRef.current = requestAnimationFrame(update);
@@ -116,7 +116,7 @@ function App() {
   const handleWheel = (e) => {
     if (isRunning || isPaused) return;
 
-    let current = duration;
+    let current = duration / 60;
     let delta = e.deltaY < 0 ? 1 : -1;
 
     if (!scrollStarted && current % 5 !== 0) {
@@ -131,8 +131,8 @@ function App() {
     } else {
       current = Math.min(60, Math.max(0, current + delta * 5));
     }
-
-    setDuration(current);
+    const newDuration = current * 60;
+    setDuration(newDuration);
     const progress = 1;
     drawTimer(progress, current / 60);
   };
@@ -146,15 +146,18 @@ function App() {
       <input
         className="time-input"
         type="text"
-        value={duration}
+        value={formatTime(isRunning || isPaused ? timeLeft : duration)}
         onChange={(e) => {
-          const val = e.target.value.replace(/\D/g, '');
-          const num = Math.min(60, Number(val));
+          const val = e.target.value.replace(/[^\d:]/g, '');
+          const [m = '0', s = '0'] = val.split(':');
+          const minutes = parseInt(m, 10) || 0;
+          const seconds = parseInt(s, 10) || 0;
+          const total = Math.min(3600, minutes * 60 + seconds);
           if (!isRunning && !isPaused) {
             setScrollStarted(false);
-            setDuration(num);
-            setTimeLeft(num * 60);
-            drawTimer(1, num / 60);
+            setDuration(total);
+            setTimeLeft(total);
+            drawTimer(1, total / 3600);
           }
         }}
         onWheel={handleWheel}
