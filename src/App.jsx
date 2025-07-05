@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 function App() {
-  const [duration, setDuration] = useState(15); // 분 단위
+  const [duration, setDuration] = useState(0); // 분 단위
   const [timeLeft, setTimeLeft] = useState(0); // 초 단위
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -10,17 +10,8 @@ function App() {
   const requestRef = useRef(null);
   const startTimestamp = useRef(null);
   const pausedElapsed = useRef(0);
-
   const canvasRef = useRef(null);
 
-  // ⏳ 남은 시간 표시용
-  const formatTime = (seconds) => {
-    const m = String(Math.floor(seconds / 60)).padStart(2, '0');
-    const s = String(Math.floor(seconds % 60)).padStart(2, '0');
-    return `${m}:${s}`;
-  };
-
-  // 타이머 애니메이션
   const drawTimer = (progress) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -32,134 +23,101 @@ function App() {
 
     ctx.clearRect(0, 0, w, h);
 
-    // 1. 배경 원 - 검정색
+    // 배경 원
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
     ctx.fillStyle = '#000000';
     ctx.fill();
 
-    // 2. 진행되지 않은 부분 - 아주 어두운 회색
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 - 2 * Math.PI * progress, true);
-    ctx.closePath();
-    ctx.fillStyle = '#ff4444';
-    ctx.fill();
-
-    // 3. 진행된 부분 - 빨간색
-    if (progress < 1) {
+    if (progress < 1 && progress > 0) {
+      // 빨간 게이지
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.arc(cx, cy, radius, -Math.PI / 2 - 2 * Math.PI * progress, -Math.PI / 2, true);
+      ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * progress);
       ctx.closePath();
-      ctx.fillStyle = '#222222';
+      ctx.fillStyle = '#ff4444';
       ctx.fill();
     }
   };
 
-  // 타이머 업데이트 함수
-  const update = (timestamp) => {
-    if (!startTimestamp.current) startTimestamp.current = timestamp;
-
-    const elapsed = (timestamp - startTimestamp.current + pausedElapsed.current) / 1000;
-    const totalSeconds = Number(duration) * 60;
-    const remaining = Math.max(totalSeconds - elapsed, 0);
-    setTimeLeft(remaining);
-
-    const progress = remaining / totalSeconds;
-    drawTimer(progress);
-
-    if (remaining > 0) {
-      requestRef.current = requestAnimationFrame(update);
-    } else {
-      setIsRunning(false);
-    }
+  const handleWheel = (e) => {
+    if (isRunning || isPaused) return;
+    setDuration((prev) => {
+      let next;
+      if (prev % 5 !== 0) {
+        if (e.deltaY < 0) {
+          next = Math.min(60, prev + (5 - (prev % 5)));
+        } else {
+          next = Math.max(0, prev - (prev % 5));
+        }
+      } else {
+        next = e.deltaY < 0 ? Math.min(60, prev + 5) : Math.max(0, prev - 5);
+      }
+      drawTimer(next / 60);
+      return next;
+    });
   };
 
-  // start 버튼
-  const handleStart = () => {
-    if (duration <= 0 || isRunning) return;
-    setIsRunning(true);
-    setIsPaused(false);
-    setTimeLeft(duration * 60);
-    pausedElapsed.current = 0;
-    startTimestamp.current = null;
-    requestRef.current = requestAnimationFrame(update);
-  };
-
-  // pause 버튼
-  const handlePause = () => {
-    if (!isRunning) return; // 타이머가 시작되지 않았으면 무시
-  
-    if (!isPaused) {
-      // 타이머 일시정지
-      cancelAnimationFrame(requestRef.current);
-      pausedElapsed.current += performance.now() - startTimestamp.current;
-      setIsPaused(true);
-    } else {
-      // 타이머 재개
-      startTimestamp.current = null;
-      requestRef.current = requestAnimationFrame(update);
-      setIsPaused(false);
-    }
-  };
-  
-
-  // reset 버튼
   const handleReset = () => {
     cancelAnimationFrame(requestRef.current);
     setIsRunning(false);
     setIsPaused(false);
     pausedElapsed.current = 0;
     setTimeLeft(0);
-    drawTimer(1);
+    drawTimer(0);
   };
 
-  // 입력란에서 마우스 휠로 시간 조정
-  const handleWheel = (e) => {
-    if (isRunning || isPaused) return;
-    const delta = e.deltaY < 0 ? 5 : -5;
-    setDuration(prev => Math.max(0, prev + delta));
+  const formatTime = (seconds) => {
+    const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+    const s = String(Math.floor(seconds % 60)).padStart(2, '0');
+    return `${m}:${s}`;
   };
 
-  // 초기 한번 타이머 기본 상태 렌더링
   useEffect(() => {
-    drawTimer(1);
+    drawTimer(duration / 60);
+  }, [duration]);
+
+  useEffect(() => {
+    drawTimer(0);
   }, []);
 
   return (
     <div className="container">
-      {/* 입력란 */}
       <input
         className="time-input"
         type="text"
         value={duration}
         onChange={(e) => {
-          const val = e.target.value.replace(/\D/g, ''); // 숫자 이외 제거
+          const val = e.target.value.replace(/\D/g, '');
           if (!isRunning && !isPaused) {
-            setDuration(Number(val));
+            const clamped = Math.min(Number(val), 60);
+            setDuration(clamped);
           }
         }}
         onWheel={handleWheel}
         onClick={handleReset}
       />
 
-      {/* 타이머 원 */}
-      <canvas ref={canvasRef} className="timer-canvas" width={400} height={400} onClick={isRunning ? handlePause : handleStart}/>
+      <canvas
+        ref={canvasRef}
+        className="timer-canvas"
+        width={400}
+        height={400}
+        onWheel={handleWheel}
+        onClick={handleReset}
+      />
 
-      {/* 남은 시간 */}
       <div className="time-display">
-        {formatTime(timeLeft)}
+        {formatTime(duration * 60)}
       </div>
 
-      {/* 버튼 */}
-      <div className="buttons">
+      {/* <div className="buttons">
         <button onClick={handleStart} disabled={isRunning}>START</button>
         <button onClick={handlePause} disabled={!isRunning} className="pause-btn">
           {isPaused ? 'RESUME' : 'PAUSE'}
         </button>
         <button onClick={handleReset}>RESET</button>
-      </div>
+      </div> */}
     </div>
   );
 }
