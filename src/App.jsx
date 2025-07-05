@@ -15,8 +15,9 @@ function App() {
   const canvasRef = useRef(null);
 
   const formatTime = (seconds) => {
-    const m = String(Math.floor(seconds / 60)).padStart(2, '0');
-    const s = String(seconds % 60).padStart(2, '0');
+    const total = Math.floor(seconds); // 👈 소수점 버림
+    const m = String(Math.floor(total / 60)).padStart(2, '0');
+    const s = String(total % 60).padStart(2, '0');
     return `${m}:${s}`;
   };
 
@@ -64,16 +65,16 @@ function App() {
 
   const update = (timestamp) => {
     if (!startTimestamp.current) startTimestamp.current = timestamp;
-
+  
     const elapsed = (timestamp - startTimestamp.current + pausedElapsed.current) / 1000;
     const totalSeconds = duration;
     const remaining = Math.max(totalSeconds - elapsed, 0);
     setTimeLeft(remaining);
-
+  
     const progress = remaining / totalSeconds;
-    const maxProgress = duration / 60;
+    const maxProgress = duration / 3600; // 기준: 60분 = 3600초
     drawTimer(progress, maxProgress);
-
+  
     if (remaining > 0) {
       requestRef.current = requestAnimationFrame(update);
     } else {
