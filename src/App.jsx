@@ -6,11 +6,19 @@ function App() {
   const [timeLeft, setTimeLeft] = useState(0); // 초 단위
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [scrollStarted, setScrollStarted] = useState(false);
+  const [scrollDirection, setScrollDirection] = useState(null); // 'up' 또는 'down'
 
   const requestRef = useRef(null);
   const startTimestamp = useRef(null);
   const pausedElapsed = useRef(0);
   const canvasRef = useRef(null);
+
+  const formatTime = (seconds) => {
+    const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+    const s = String(Math.floor(seconds % 60)).padStart(2, '0');
+    return `${m}:${s}`;
+  };
 
   const drawTimer = (progress) => {
     const canvas = canvasRef.current;
@@ -23,39 +31,70 @@ function App() {
 
     ctx.clearRect(0, 0, w, h);
 
-    // 배경 원
+    // 배경 원 (전체)
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
     ctx.fillStyle = '#000000';
     ctx.fill();
 
-    if (progress < 1 && progress > 0) {
-      // 빨간 게이지
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * progress);
-      ctx.closePath();
-      ctx.fillStyle = '#ff4444';
-      ctx.fill();
+    if (progress <= 0) return; // 0보다 작거나 같을 경우 그리지 않음
+
+    // 진행되지 않은 부분 (짙은 회색)
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * (1 - progress));
+    ctx.closePath();
+    ctx.fillStyle = '#222222';
+    ctx.fill();
+
+    // 진행된 빨간 부분
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, radius, -Math.PI / 2 + 2 * Math.PI * (1 - progress), -Math.PI / 2);
+    ctx.closePath();
+    ctx.fillStyle = '#ff4444';
+    ctx.fill();
+  };
+
+  const update = (timestamp) => {
+    if (!startTimestamp.current) startTimestamp.current = timestamp;
+
+    const elapsed = (timestamp - startTimestamp.current + pausedElapsed.current) / 1000;
+    const totalSeconds = duration * 60;
+    const remaining = Math.max(totalSeconds - elapsed, 0);
+    setTimeLeft(remaining);
+
+    const progress = 1 - remaining / totalSeconds;
+    drawTimer(progress);
+
+    if (remaining > 0) {
+      requestRef.current = requestAnimationFrame(update);
+    } else {
+      setIsRunning(false);
     }
   };
 
-  const handleWheel = (e) => {
-    if (isRunning || isPaused) return;
-    setDuration((prev) => {
-      let next;
-      if (prev % 5 !== 0) {
-        if (e.deltaY < 0) {
-          next = Math.min(60, prev + (5 - (prev % 5)));
-        } else {
-          next = Math.max(0, prev - (prev % 5));
-        }
-      } else {
-        next = e.deltaY < 0 ? Math.min(60, prev + 5) : Math.max(0, prev - 5);
-      }
-      drawTimer(next / 60);
-      return next;
-    });
+  const handleStart = () => {
+    if (duration <= 0 || isRunning) return;
+    setIsRunning(true);
+    setIsPaused(false);
+    setTimeLeft(duration * 60);
+    pausedElapsed.current = 0;
+    startTimestamp.current = null;
+    requestRef.current = requestAnimationFrame(update);
+  };
+
+  const handlePause = () => {
+    if (!isRunning) return;
+    if (!isPaused) {
+      cancelAnimationFrame(requestRef.current);
+      pausedElapsed.current += performance.now() - startTimestamp.current;
+      setIsPaused(true);
+    } else {
+      startTimestamp.current = null;
+      requestRef.current = requestAnimationFrame(update);
+      setIsPaused(false);
+    }
   };
 
   const handleReset = () => {
@@ -67,15 +106,30 @@ function App() {
     drawTimer(0);
   };
 
-  const formatTime = (seconds) => {
-    const m = String(Math.floor(seconds / 60)).padStart(2, '0');
-    const s = String(Math.floor(seconds % 60)).padStart(2, '0');
-    return `${m}:${s}`;
-  };
+  const handleWheel = (e) => {
+    if (isRunning || isPaused) return;
 
-  useEffect(() => {
-    drawTimer(duration / 60);
-  }, [duration]);
+    let current = duration;
+    let delta = e.deltaY < 0 ? 1 : -1;
+
+    // 5로 나눠떨어지지 않을 경우, 처음 한 번만 정렬
+    if (!scrollStarted && current % 5 !== 0) {
+      setScrollStarted(true);
+      if (delta > 0) {
+        current = Math.min(60, current + (5 - (current % 5))); // 업 스크롤
+        setScrollDirection('up');
+      } else {
+        current = Math.max(0, current - (current % 5)); // 다운 스크롤
+        setScrollDirection('down');
+      }
+    } else {
+      current = Math.min(60, Math.max(0, current + delta * 5));
+    }
+
+    setDuration(current);
+    const progress = current / 60;
+    drawTimer(progress);
+  };
 
   useEffect(() => {
     drawTimer(0);
@@ -89,9 +143,11 @@ function App() {
         value={duration}
         onChange={(e) => {
           const val = e.target.value.replace(/\D/g, '');
+          const num = Math.min(60, Number(val));
           if (!isRunning && !isPaused) {
-            const clamped = Math.min(Number(val), 60);
-            setDuration(clamped);
+            setScrollStarted(false);
+            setDuration(num);
+            drawTimer(num / 60);
           }
         }}
         onWheel={handleWheel}
@@ -103,13 +159,11 @@ function App() {
         className="timer-canvas"
         width={400}
         height={400}
+        onClick={isRunning ? handlePause : handleStart}
         onWheel={handleWheel}
-        onClick={handleReset}
       />
 
-      <div className="time-display">
-        {formatTime(duration * 60)}
-      </div>
+      <div className="time-display">{formatTime(timeLeft)}</div>
 
       {/* <div className="buttons">
         <button onClick={handleStart} disabled={isRunning}>START</button>
