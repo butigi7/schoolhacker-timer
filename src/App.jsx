@@ -21,7 +21,7 @@ function App() {
     return `${m}:${s}`;
   };
 
-  const drawTimer = (progress, maxProgress) => {
+  const drawTimer = (progress, maxProgress, paused = false) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const w = canvas.width;
@@ -29,39 +29,42 @@ function App() {
     const cx = w / 2;
     const cy = h / 2;
     const radius = Math.min(w, h) / 2 - 10;
-
+  
     ctx.clearRect(0, 0, w, h);
-
+  
     // 배경 원 (전체)
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
     ctx.fillStyle = '#222';
     ctx.fill();
-
+  
     if (!maxProgress || progress <= 0) return;
-
+  
     const startAngle = -Math.PI / 2;
     const endAngle = startAngle + 2 * Math.PI * maxProgress;
     const currentEnd = startAngle + 2 * Math.PI * maxProgress * progress;
-
-    // 진행되지 않은 회색 영역
+  
+    // 회색 영역: 진행되지 않은 부분
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.arc(cx, cy, radius, currentEnd, endAngle);
     ctx.closePath();
     ctx.fillStyle = '#222222';
     ctx.fill();
-
-    // 진행된 빨간 영역
+  
+    // 빨간 영역: 진행된 부분
     if (progress > 0) {
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.arc(cx, cy, radius, startAngle, currentEnd);
       ctx.closePath();
-      ctx.fillStyle = isPaused ? '#aa2222' : '#ff4444';
+      
+      // ✅ paused 매개변수를 사용해 색상 결정 (기존 isPaused 참조 코드 삭제)
+      ctx.fillStyle = paused ? '#aa2222' : '#ff4444';
       ctx.fill();
     }
   };
+  
 
   const update = (timestamp) => {
     if (!startTimestamp.current) startTimestamp.current = timestamp;
@@ -162,7 +165,11 @@ function App() {
           }
         }}
         onWheel={handleWheel}
-        onClick={handleReset}
+        onClick={() => {
+          if (isRunning || isPaused) {
+            handleReset();
+          }
+        }}
       />
 
       <canvas
@@ -173,8 +180,6 @@ function App() {
         onClick={isRunning ? handlePause : handleStart}
         onWheel={handleWheel}
       />
-
-      <div className="time-display">{formatTime(timeLeft)}</div>
     </div>
   );
 }
