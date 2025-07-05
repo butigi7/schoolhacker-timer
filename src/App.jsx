@@ -20,7 +20,6 @@ function App() {
     return `${m}:${s}`;
   };
 
-  // drawTimer(progress) 함수 부분 수정
   const drawTimer = (progress, maxProgress) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -38,23 +37,27 @@ function App() {
     ctx.fillStyle = '#222';
     ctx.fill();
 
-    if (progress <= 0) return; // 0보다 작거나 같을 경우 그리지 않음
+    if (!maxProgress || progress <= 0) return;
 
-    // 진행되지 않은 부분 (짙은 회색)
+    const startAngle = -Math.PI / 2;
+    const endAngle = startAngle + 2 * Math.PI * maxProgress;
+    const currentEnd = startAngle + 2 * Math.PI * maxProgress * progress;
+
+    // 진행되지 않은 회색 영역
     ctx.beginPath();
     ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * (1 - progress));
+    ctx.arc(cx, cy, radius, currentEnd, endAngle);
     ctx.closePath();
     ctx.fillStyle = '#222222';
     ctx.fill();
 
-    // 진행된 빨간 부분
+    // 진행된 빨간 영역
     if (progress > 0) {
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * progress, false); // 반시계 방향
+      ctx.arc(cx, cy, radius, startAngle, currentEnd);
       ctx.closePath();
-      ctx.fillStyle = '#ff4444'; // 빨간색
+      ctx.fillStyle = '#ff4444';
       ctx.fill();
     }
   };
@@ -107,7 +110,7 @@ function App() {
     setIsPaused(false);
     pausedElapsed.current = 0;
     setTimeLeft(0);
-    drawTimer(0);
+    drawTimer(0, duration / 60);
   };
 
   const handleWheel = (e) => {
@@ -116,14 +119,13 @@ function App() {
     let current = duration;
     let delta = e.deltaY < 0 ? 1 : -1;
 
-    // 5로 나눠떨어지지 않을 경우, 처음 한 번만 정렬
     if (!scrollStarted && current % 5 !== 0) {
       setScrollStarted(true);
       if (delta > 0) {
-        current = Math.min(60, current + (5 - (current % 5))); // 업 스크롤
+        current = Math.min(60, current + (5 - (current % 5)));
         setScrollDirection('up');
       } else {
-        current = Math.max(0, current - (current % 5)); // 다운 스크롤
+        current = Math.max(0, current - (current % 5));
         setScrollDirection('down');
       }
     } else {
@@ -131,17 +133,16 @@ function App() {
     }
 
     setDuration(current);
-    const progress = current / 60;
-    drawTimer(0, current / 60);
+    const progress = 1;
+    drawTimer(progress, current / 60);
   };
 
   useEffect(() => {
-    drawTimer(0);
+    drawTimer(0, duration / 60);
   }, []);
 
   return (
     <div className="container">
-      {/* 입력란 */}
       <input
         className="time-input"
         type="text"
@@ -150,41 +151,30 @@ function App() {
           const val = e.target.value.replace(/\D/g, '');
           const num = Math.min(60, Number(val));
           if (!isRunning && !isPaused) {
-            setScrollStarted(false); // 스크롤 보정 초기화
+            setScrollStarted(false);
             setDuration(num);
             setTimeLeft(num * 60);
-            drawTimer(1, num / 60); // 입력한 시간 비율로 전체 게이지 표시
+            drawTimer(1, num / 60);
           }
         }}
         onWheel={handleWheel}
         onClick={handleReset}
       />
-  
-      {/* 타이머 원 */}
+
       <canvas
         ref={canvasRef}
         className="timer-canvas"
         width={400}
         height={400}
         onClick={isRunning ? handlePause : handleStart}
-        onWheel={handleWheel} // 캔버스 위에서 휠 가능
+        onWheel={handleWheel}
       />
-  
-      {/* 남은 시간 표시 */}
+
       <div className="time-display">{formatTime(timeLeft)}</div>
-  
-      {/* 버튼 영역은 주석 처리 */}
-      {/*
-      <div className="buttons">
-        <button onClick={handleStart} disabled={isRunning}>START</button>
-        <button onClick={handlePause} disabled={!isRunning} className="pause-btn">
-          {isPaused ? 'RESUME' : 'PAUSE'}
-        </button>
-        <button onClick={handleReset}>RESET</button>
-      </div>
-      */}
     </div>
   );
 }
 
 export default App;
+
+//전체 수정함.14:33
