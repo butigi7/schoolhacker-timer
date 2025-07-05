@@ -67,7 +67,7 @@ function App() {
     const remaining = Math.max(totalSeconds - elapsed, 0);
     setTimeLeft(remaining);
 
-    const progress = 1 - remaining / totalSeconds;
+    const progress = remaining / totalSeconds;
     drawTimer(progress);
 
     if (remaining > 0) {
