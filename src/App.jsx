@@ -49,7 +49,7 @@ function App() {
     ctx.fill();
 
     // 진행된 빨간 부분
-    if (progress > 0 && progress < 1) {
+    if (progress > 0) {
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * progress, false); // 반시계 방향
@@ -140,6 +140,7 @@ function App() {
 
   return (
     <div className="container">
+      {/* 입력란 */}
       <input
         className="time-input"
         type="text"
@@ -148,33 +149,39 @@ function App() {
           const val = e.target.value.replace(/\D/g, '');
           const num = Math.min(60, Number(val));
           if (!isRunning && !isPaused) {
-            setScrollStarted(false);
+            setScrollStarted(false); // 스크롤 보정 초기화
             setDuration(num);
-            drawTimer(num / 60);
+            setTimeLeft(num * 60);
+            drawTimer(num / 60); // 입력 시 게이지 반영
           }
         }}
         onWheel={handleWheel}
         onClick={handleReset}
       />
-
+  
+      {/* 타이머 원 */}
       <canvas
         ref={canvasRef}
         className="timer-canvas"
         width={400}
         height={400}
         onClick={isRunning ? handlePause : handleStart}
-        onWheel={handleWheel}
+        onWheel={handleWheel} // 캔버스 위에서 휠 가능
       />
-
+  
+      {/* 남은 시간 표시 */}
       <div className="time-display">{formatTime(timeLeft)}</div>
-
-      {/* <div className="buttons">
+  
+      {/* 버튼 영역은 주석 처리 */}
+      {/*
+      <div className="buttons">
         <button onClick={handleStart} disabled={isRunning}>START</button>
         <button onClick={handlePause} disabled={!isRunning} className="pause-btn">
           {isPaused ? 'RESUME' : 'PAUSE'}
         </button>
         <button onClick={handleReset}>RESET</button>
-      </div> */}
+      </div>
+      */}
     </div>
   );
 }
