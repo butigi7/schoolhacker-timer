@@ -18,24 +18,40 @@ body, #root {
   align-items: center;
   justify-content: center;
   height: 100vh;
+  overflow: hidden;
+  background-color: transparent;
+  color: black;
 }
 
 .time-input {
   appearance: none;
-  border: 1px solid white;
-  border-radius: 0;
+  border: 1px solid #222222; /* JSX와 동일하게 */
+  border-radius: 4px; /* 둥근 테두리 적용 */
   box-shadow: none;
-  background-color: #333;
+  background-color: #222222; /* JSX와 동일하게 */
   color: white;
-  font-size: 2rem;
-  width: 100px;
+  font-size: 1.5rem; /* JSX와 동일하게 */
+  width: 80px; /* JSX와 동일하게 */
   text-align: center;
+  height: 40px;
+  margin-top: 5px;
+  margin-bottom: 20px;
+}
+
+.time-display {
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+  color: #cccccc;
 }
 
 canvas {
   display: block;
   margin: auto;
   background-color: transparent;
+}
+
+.timer-canvas {
+  margin-bottom: 10px;
 }
 
 .time-display {
@@ -45,8 +61,9 @@ canvas {
 
 .buttons {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   margin-top: 10px;
+  margin-bottom: 5px;
 }
 
 button {
@@ -57,4 +74,12 @@ button {
   border-radius: 8px;
   font-size: 1rem;
   cursor: pointer;
+}
+
+.pause-btn {
+  width: 90px;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }

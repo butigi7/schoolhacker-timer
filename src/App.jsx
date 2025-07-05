@@ -78,7 +78,6 @@ function App() {
 
   // start 버튼
   const handleStart = () => {
-    const numericDuration = Number(duration);
     if (duration <= 0 || isRunning) return;
     setIsRunning(true);
     setIsPaused(false);
@@ -129,19 +128,10 @@ function App() {
   }, []);
 
   return (
-    <div
-      style={{
-        backgroundColor: 'transparent',
-        color: 'black',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}
-    >
+    <div className="container">
       {/* 입력란 */}
       <input
+        className="time-input"
         type="text"
         value={duration}
         onChange={(e) => {
@@ -152,34 +142,20 @@ function App() {
         }}
         onWheel={handleWheel}
         onClick={handleReset}
-        style={{
-          appearance: 'none',
-          border: '#222222',
-          borderRadius: '4px',
-          boxShadow: 'none',
-          backgroundColor: '#222222',
-          color: 'white',
-          fontSize: '1.5rem',
-          width: '80px',
-          height: '40px',
-          textAlign: 'center',
-          marginTop: '5px',
-          marginBottom: '20px'
-        }}
       />
 
       {/* 타이머 원 */}
-      <canvas ref={canvasRef} width={400} height={400} onClick={() => { !isRunning ? handleStart() : handlePause(); }} style={{ marginBottom: '10px' }} />
+      <canvas ref={canvasRef} className="timer-canvas" width={400} height={400} onClick={isRunning ? handlePause : handleStart}/>
 
       {/* 남은 시간 */}
-      <div style={{ fontSize: '1.5rem', marginBottom: '20px', color: '#cccccc' }}>
+      <div className="time-display">
         {formatTime(timeLeft)}
       </div>
 
       {/* 버튼 */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '5px' }}>
+      <div className="buttons">
         <button onClick={handleStart} disabled={isRunning}>START</button>
-        <button onClick={handlePause} disabled={!isRunning} style={{ width: '90px', display: 'flex', textAlign: 'center', justifyContent: 'center' }}>
+        <button onClick={handlePause} disabled={!isRunning} className="pause-btn">
           {isPaused ? 'RESUME' : 'PAUSE'}
         </button>
         <button onClick={handleReset}>RESET</button>
