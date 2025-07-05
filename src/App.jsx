@@ -132,7 +132,7 @@ function App() {
 
     setDuration(current);
     const progress = current / 60;
-    drawTimer(progress);
+    drawTimer(1, current / 60);
   };
 
   useEffect(() => {
