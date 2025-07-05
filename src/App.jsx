@@ -76,7 +76,7 @@ function App() {
   
     const progress = remaining / totalSeconds;
     const maxProgress = duration / 3600; // 기준: 60분 = 3600초
-    drawTimer(progress, maxProgress);
+    drawTimer(progress, maxProgress, isPaused);
   
     if (remaining > 0) {
       requestRef.current = requestAnimationFrame(update);
@@ -138,7 +138,7 @@ function App() {
     const newDuration = current * 60;
     setDuration(newDuration);
     const progress = 1;
-    drawTimer(progress, current / 60);
+    drawTimer(progress, current / 60, isPaused);
   };
 
   useEffect(() => {
