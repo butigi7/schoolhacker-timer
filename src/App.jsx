@@ -20,6 +20,7 @@ function App() {
     return `${m}:${s}`;
   };
 
+  // drawTimer(progress) 함수 부분 수정
   const drawTimer = (progress) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -34,7 +35,7 @@ function App() {
     // 배경 원 (전체)
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = '#222';
     ctx.fill();
 
     if (progress <= 0) return; // 0보다 작거나 같을 경우 그리지 않음
@@ -48,12 +49,14 @@ function App() {
     ctx.fill();
 
     // 진행된 빨간 부분
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, radius, -Math.PI / 2 + 2 * Math.PI * (1 - progress), -Math.PI / 2);
-    ctx.closePath();
-    ctx.fillStyle = '#ff4444';
-    ctx.fill();
+    if (progress > 0 && progress < 1) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * progress, false); // 반시계 방향
+      ctx.closePath();
+      ctx.fillStyle = '#ff4444'; // 빨간색
+      ctx.fill();
+    }
   };
 
   const update = (timestamp) => {
