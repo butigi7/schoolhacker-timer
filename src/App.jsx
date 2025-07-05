@@ -153,7 +153,7 @@ function App() {
             setScrollStarted(false); // 스크롤 보정 초기화
             setDuration(num);
             setTimeLeft(num * 60);
-            drawTimer(0, num / 60); // 입력한 시간 비율로 전체 게이지 표시
+            drawTimer(1, num / 60); // 입력한 시간 비율로 전체 게이지 표시
           }
         }}
         onWheel={handleWheel}
