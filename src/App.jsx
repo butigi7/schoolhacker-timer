@@ -151,6 +151,7 @@ function App() {
           }
         }}
         onWheel={handleWheel}
+        onClick={handleReset}
         style={{
           appearance: 'none',
           border: '#222222',
@@ -168,7 +169,7 @@ function App() {
       />
 
       {/* 타이머 원 */}
-      <canvas ref={canvasRef} width={400} height={400} style={{ marginBottom: '10px' }} />
+      <canvas ref={canvasRef} width={400} height={400} onClick={() => { !isRunning ? handleStart() : handlePause(); }} style={{ marginBottom: '10px' }} />
 
       {/* 남은 시간 */}
       <div style={{ fontSize: '1.5rem', marginBottom: '20px', color: '#cccccc' }}>
