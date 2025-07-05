@@ -21,7 +21,7 @@ function App() {
   };
 
   // drawTimer(progress) 함수 부분 수정
-  const drawTimer = (progress) => {
+  const drawTimer = (progress, maxProgress) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const w = canvas.width;
@@ -68,7 +68,8 @@ function App() {
     setTimeLeft(remaining);
 
     const progress = remaining / totalSeconds;
-    drawTimer(progress);
+    const maxProgress = duration / 60;
+    drawTimer(progress, maxProgress);
 
     if (remaining > 0) {
       requestRef.current = requestAnimationFrame(update);
