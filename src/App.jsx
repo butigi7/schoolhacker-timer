@@ -76,7 +76,7 @@ function App() {
   
     const progress = remaining / totalSeconds;
     const maxProgress = duration / 3600; // 기준: 60분 = 3600초
-    drawTimer(progress, maxProgress, isPaused);
+    drawTimer(progress, maxProgress, false);
   
     if (remaining > 0) {
       requestRef.current = requestAnimationFrame(update);
@@ -101,10 +101,14 @@ function App() {
       cancelAnimationFrame(requestRef.current);
       pausedElapsed.current += performance.now() - startTimestamp.current;
       setIsPaused(true);
+      // ✅ 여기 추가: 색상 즉시 반영
+      const progress = timeLeft / duration;
+      const maxProgress = duration / 3600;
+      drawTimer(progress, maxProgress, true);
     } else {
+      setIsPaused(false); // 상태만 바꾸고
       startTimestamp.current = null;
       requestRef.current = requestAnimationFrame(update);
-      setIsPaused(false);
     }
   };
 

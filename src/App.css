@@ -24,12 +24,12 @@ body, #root {
 
 .time-input {
   appearance: none;
-  border: 1px solid #222222;
+  border: 1px solid transparent;
   border-radius: 4px; /* 둥근 테두리 적용 */
   box-shadow: none;
-  background-color: #222222;
+  background-color: transparent;
   color: white;
-  font-size: 8rem;
+  font-size: 6rem;
   width: 300px;
   text-align: center;
   height: 120px;
@@ -50,29 +50,4 @@ canvas {
 .time-display {
   font-size: 1.5rem;
   margin: 10px 0;
-}
-
-.buttons {
-  display: flex;
-  gap: 12px;
-  margin-top: 10px;
-  margin-bottom: 5px;
-}
-
-button {
-  padding: 10px 20px;
-  background: #222;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  cursor: pointer;
-}
-
-.pause-btn {
-  width: 90px;
-  text-align: center;
-  display: flex;
-  justify-content: center;
-  align-items: center;
 }
