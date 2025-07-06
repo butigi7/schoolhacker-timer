@@ -186,8 +186,10 @@ function App() {
     if (e.key === 'Enter') {
       e.preventDefault();
       if (duration > 0) {
-        handleStart();
-        e.target.blur();
+        e.target.blur(); // 먼저 blur 처리
+        setTimeout(() => {
+          handleStart();
+        }, 100);
       }
     }
     
@@ -195,8 +197,10 @@ function App() {
     if ((e.key === 'Go' || e.key === 'Done' || e.key === 'Next' || e.keyCode === 13)) {
       e.preventDefault();
       if (duration > 0) {
-        handleStart();
-        e.target.blur();
+        e.target.blur(); // 먼저 blur 처리
+        setTimeout(() => {
+          handleStart();
+        }, 100);
       }
     }
   };
@@ -320,6 +324,12 @@ function App() {
 
   const handleStart = () => {
     if (isRunning) return;
+    
+    // input이 focus되어 있다면 blur 처리
+    if (inputRef.current && document.activeElement === inputRef.current) {
+      inputRef.current.blur();
+    }
+    
     const watchMode = duration <= 0;
     setIsStopwatch(watchMode);
     setTimeLeft(watchMode ? 0 : duration);
@@ -371,6 +381,57 @@ function App() {
 
   const handleCanvasTouch = (e) => {
     e.preventDefault(); // 기본 동작 방지
+    e.stopPropagation(); // 이벤트 전파 방지
+    
+    // input이 focus되어 있다면 먼저 blur 처리 후 약간 지연
+    if (inputRef.current && document.activeElement === inputRef.current) {
+      inputRef.current.blur();
+      // 가상 키보드가 닫히고 상태가 안정화될 때까지 짧은 지연
+      setTimeout(() => {
+        if (isRunning) {
+          handlePause();
+        } else {
+          handleStart();
+        }
+      }, 100);
+      return;
+    }
+    
+    // 터치 이벤트가 발생했음을 표시
+    if (e.type === 'touchstart') {
+      e.target.setAttribute('data-touched', 'true');
+    }
+    
+    if (isRunning) {
+      handlePause();
+    } else {
+      handleStart();
+    }
+  };
+
+  const handleCanvasClick = (e) => {
+    // 터치 이벤트가 이미 처리되었다면 클릭 이벤트는 무시
+    if (e.target.getAttribute('data-touched') === 'true') {
+      e.target.removeAttribute('data-touched');
+      return;
+    }
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // input이 focus되어 있다면 먼저 blur 처리 후 약간 지연
+    if (inputRef.current && document.activeElement === inputRef.current) {
+      inputRef.current.blur();
+      setTimeout(() => {
+        if (isRunning) {
+          handlePause();
+        } else {
+          handleStart();
+        }
+      }, 100);
+      return;
+    }
+    
     if (isRunning) {
       handlePause();
     } else {
@@ -485,10 +546,19 @@ function App() {
         width={400}
         height={400}
         onTouchStart={handleCanvasTouch}
-        onTouchEnd={(e) => e.preventDefault()}
-        onClick={handleCanvasTouch}
+        onTouchEnd={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onClick={handleCanvasClick}
         onWheel={handleWheel}
-        style={{ touchAction: 'none' }}
+        style={{ 
+          touchAction: 'none',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          WebkitTouchCallout: 'none',
+          WebkitTapHighlightColor: 'transparent'
+        }}
       />
     </div>
   );
