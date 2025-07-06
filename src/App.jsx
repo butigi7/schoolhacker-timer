@@ -1,14 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
+function playAlarm() {
+  const audio = new Audio('/alarm.mp3');
+  audio.play();
+}
+
 function App() {
+  
   const [duration, setDuration] = useState(0); // 초 단위
   const [timeLeft, setTimeLeft] = useState(0); // 초 단위
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [scrollStarted, setScrollStarted] = useState(false);
   const [isStopwatch, setIsStopwatch] = useState(false);
-  const [displayValue, setDisplayValue] = useState('00:00');
   const [originalDuration, setOriginalDuration] = useState(0); // 타이머 시작 시의 원래 설정 시간
 
   const requestRef = useRef(null);
@@ -16,6 +21,8 @@ function App() {
   const pausedElapsed = useRef(0);
   const canvasRef = useRef(null);
   const inputRef = useRef(null);
+  const prevTimeLeft = useRef(timeLeft);
+  const prevIsRunning = useRef(isRunning);
 
   const formatTime = (seconds) => {
     const total = Math.floor(seconds); // 👈 소수점 버림
@@ -25,7 +32,41 @@ function App() {
   };
 
   const handleInputChange = (e) => {
-    // onInput에서는 아무것도 하지 않음 (onKeyDown에서 처리)
+    // 모바일에서 가상 키보드로 입력된 값 처리
+    if (isRunning || isPaused) return;
+    
+    const input = e.target;
+    const value = input.value;
+    
+    // 숫자와 콜론만 허용
+    const cleaned = value.replace(/[^\d:]/g, '');
+    
+    // 기본 포맷 유지 (MM:SS)
+    if (cleaned.length <= 5) {
+      let formatted = cleaned;
+      
+      // 콜론이 없으면 자동으로 추가
+      if (cleaned.length >= 3 && !cleaned.includes(':')) {
+        formatted = cleaned.substring(0, 2) + ':' + cleaned.substring(2);
+      }
+      
+      // 포맷이 올바른지 확인
+      const parts = formatted.split(':');
+      if (parts.length === 2) {
+        const minutes = Math.min(parseInt(parts[0] || '0', 10), 59);
+        const seconds = Math.min(parseInt(parts[1] || '0', 10), 59);
+        const total = Math.min(3600, minutes * 60 + seconds);
+        
+        formatted = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        
+        setDuration(total);
+        setTimeLeft(total);
+        setDisplayValue(formatted);
+        drawTimer(1, total / 3600, false);
+      }
+      
+      input.value = formatted;
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -137,6 +178,15 @@ function App() {
         e.target.blur();
       }
     }
+    
+    // 모바일에서 가상 키보드의 '이동', '완료', '다음' 등의 키 처리
+    if ((e.key === 'Go' || e.key === 'Done' || e.key === 'Next' || e.keyCode === 13) && !isRunning && !isPaused) {
+      e.preventDefault();
+      if (duration > 0) {
+        handleStart();
+        e.target.blur();
+      }
+    }
   };
   
 
@@ -157,7 +207,7 @@ function App() {
     ctx.fillStyle = '#222';
     ctx.fill();
 
-    // 시계 눈금 그리기 (먼저 그리기)
+    // 시계 눈금 그리기 (게이지 뒤에 그리기)
     ctx.strokeStyle = '#666'; // 검은색(#000)과 짙은 회색(#222)의 중간 색상
     ctx.lineWidth = 2;
     
@@ -197,28 +247,17 @@ function App() {
     }
 
     // 게이지 그리기 (눈금 위에 그리기)
-    if (maxProgress > 0) {
+    if (maxProgress > 0 && progress > 0) {
       const startAngle = -Math.PI / 2;
-      const endAngle = startAngle + 2 * Math.PI * maxProgress;
       const currentEnd = startAngle + 2 * Math.PI * maxProgress * progress;
 
-      // 회색 영역: 진행되지 않은 부분
+      // 빨간 영역: 진행된 부분만 그리기
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.arc(cx, cy, radius, currentEnd, endAngle);
+      ctx.arc(cx, cy, radius, startAngle, currentEnd);
       ctx.closePath();
-      ctx.fillStyle = '#222222';
+      ctx.fillStyle = paused ? '#aa2222' : '#ff4444';
       ctx.fill();
-
-      // 빨간 영역: 진행된 부분
-      if (progress > 0) {
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.arc(cx, cy, radius, startAngle, currentEnd);
-        ctx.closePath();
-        ctx.fillStyle = paused ? '#aa2222' : '#ff4444';
-        ctx.fill();
-      }
     }
   };
 
@@ -257,7 +296,6 @@ function App() {
 
   const handleStart = () => {
     if (isRunning) return;
-  
     const watchMode = duration <= 0;
     setIsStopwatch(watchMode);
     setTimeLeft(watchMode ? 0 : duration);
@@ -333,6 +371,15 @@ function App() {
   }, []);
   
   useEffect(() => {
+    // 이전에 실행 중이었고, 이전 timeLeft가 0보다 크고, 현재 timeLeft가 0일 때 알람 재생
+    if (prevIsRunning.current && prevTimeLeft.current > 0 && timeLeft === 0 && !isStopwatch) {
+      playAlarm();
+    }
+    prevTimeLeft.current = timeLeft;
+    prevIsRunning.current = isRunning;
+  }, [timeLeft, isRunning, isStopwatch]);
+
+  useEffect(() => {
     if (isRunning) {
       const progress = isStopwatch
         ? timeLeft / 3600
@@ -344,12 +391,16 @@ function App() {
     }
   }, [isPaused]);
 
+
+
   return (
     <div className="container">
       <input
         ref={inputRef}
         className="time-input"
         type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
         value={formatTime(isRunning || isPaused ? timeLeft : duration)}
         onInput={handleInputChange}
         onKeyDown={handleKeyDown}
