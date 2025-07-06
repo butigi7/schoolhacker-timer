@@ -192,11 +192,7 @@ function App() {
       keyboardEventTime.current = Date.now(); // 키보드 이벤트 시간 기록
       
       if (duration > 0) {
-        handleStart();
-        // 약간의 딜레이 후 blur 처리하여 이벤트 충돌 방지
-        setTimeout(() => {
-          e.target.blur();
-        }, 100);
+        handleStart(); // handleStart에서 blur 처리하므로 여기서는 제거
       }
     }
   };
@@ -327,6 +323,11 @@ function App() {
     setIsPaused(false);
     pausedElapsed.current = 0;
     startTimestamp.current = null;
+  
+    // 타이머 시작 시 입력란 포커스 해제 (모바일에서 커서 제거)
+    if (inputRef.current) {
+      inputRef.current.blur();
+    }
   
     drawTimer(0, watchMode ? 1 : duration / 3600, false);
   
