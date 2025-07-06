@@ -26,6 +26,10 @@ function App() {
   const prevIsRunning = useRef(isRunning);
   const prevIsStopwatch = useRef(isStopwatch);
   const isResetting = useRef(false);
+  
+  // 키보드 이벤트 후 터치 이벤트 간섭 방지
+  const keyboardEventTime = useRef(0);
+  const touchStartTime = useRef(0);
 
   const formatTime = (seconds) => {
     const total = Math.floor(seconds); // 👈 소수점 버림
@@ -182,29 +186,20 @@ function App() {
       }
     }
     
-    // Enter 키 처리
-    if (e.key === 'Enter') {
+    // Enter 키 및 가상 키보드 버튼 처리
+    if (e.key === 'Enter' || e.key === 'Go' || e.key === 'Done' || e.key === 'Next' || e.keyCode === 13) {
       e.preventDefault();
+      keyboardEventTime.current = Date.now(); // 키보드 이벤트 시간 기록
+      
       if (duration > 0) {
-        e.target.blur(); // 먼저 blur 처리
+        handleStart();
+        // 약간의 딜레이 후 blur 처리하여 이벤트 충돌 방지
         setTimeout(() => {
-          handleStart();
-        }, 100);
-      }
-    }
-    
-    // 모바일에서 가상 키보드의 '이동', '완료', '다음' 등의 키 처리
-    if ((e.key === 'Go' || e.key === 'Done' || e.key === 'Next' || e.keyCode === 13)) {
-      e.preventDefault();
-      if (duration > 0) {
-        e.target.blur(); // 먼저 blur 처리
-        setTimeout(() => {
-          handleStart();
+          e.target.blur();
         }, 100);
       }
     }
   };
-  
 
   const drawTimer = (progress, maxProgress, paused = false) => {
     const canvas = canvasRef.current;
@@ -323,13 +318,7 @@ function App() {
   };
 
   const handleStart = () => {
-    if (isRunning) return;
-    
-    // input이 focus되어 있다면 blur 처리
-    if (inputRef.current && document.activeElement === inputRef.current) {
-      inputRef.current.blur();
-    }
-    
+    if (isRunning || isPaused) return; // 이미 실행 중이거나 일시정지 상태면 무시
     const watchMode = duration <= 0;
     setIsStopwatch(watchMode);
     setTimeLeft(watchMode ? 0 : duration);
@@ -380,20 +369,14 @@ function App() {
   };
 
   const handleCanvasTouch = (e) => {
-    e.preventDefault(); // 기본 동작 방지
-    e.stopPropagation(); // 이벤트 전파 방지
+    e.preventDefault();
+    e.stopPropagation();
     
-    // input이 focus되어 있다면 먼저 blur 처리 후 약간 지연
-    if (inputRef.current && document.activeElement === inputRef.current) {
-      inputRef.current.blur();
-      // 가상 키보드가 닫히고 상태가 안정화될 때까지 짧은 지연
-      setTimeout(() => {
-        if (isRunning) {
-          handlePause();
-        } else {
-          handleStart();
-        }
-      }, 100);
+    const currentTime = Date.now();
+    touchStartTime.current = currentTime;
+    
+    // 키보드 이벤트 후 300ms 이내의 터치는 무시 (더 짧은 시간으로 조정)
+    if (currentTime - keyboardEventTime.current < 300) {
       return;
     }
     
@@ -402,40 +385,45 @@ function App() {
       e.target.setAttribute('data-touched', 'true');
     }
     
-    if (isRunning) {
-      handlePause();
+    // 현재 상태에 따라 동작 결정
+    if (isRunning && !isPaused) {
+      handlePause(); // 실행 중이면 일시정지
+    } else if (isRunning && isPaused) {
+      handlePause(); // 일시정지 중이면 재시작 (handlePause에서 resume 처리)
     } else {
-      handleStart();
+      handleStart(); // 정지 상태면 시작
     }
   };
 
   const handleCanvasClick = (e) => {
+    const currentTime = Date.now();
+    
+    // 키보드 이벤트 후 300ms 이내의 클릭은 무시 (더 짧은 시간으로 조정)
+    if (currentTime - keyboardEventTime.current < 300) {
+      return;
+    }
+    
     // 터치 이벤트가 이미 처리되었다면 클릭 이벤트는 무시
     if (e.target.getAttribute('data-touched') === 'true') {
       e.target.removeAttribute('data-touched');
       return;
     }
     
-    e.preventDefault();
-    e.stopPropagation();
-    
-    // input이 focus되어 있다면 먼저 blur 처리 후 약간 지연
-    if (inputRef.current && document.activeElement === inputRef.current) {
-      inputRef.current.blur();
-      setTimeout(() => {
-        if (isRunning) {
-          handlePause();
-        } else {
-          handleStart();
-        }
-      }, 100);
+    // 터치 이벤트와 클릭 이벤트가 동시에 발생하는 경우 방지
+    if (currentTime - touchStartTime.current < 100) {
       return;
     }
     
-    if (isRunning) {
-      handlePause();
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // 현재 상태에 따라 동작 결정
+    if (isRunning && !isPaused) {
+      handlePause(); // 실행 중이면 일시정지
+    } else if (isRunning && isPaused) {
+      handlePause(); // 일시정지 중이면 재시작 (handlePause에서 resume 처리)
     } else {
-      handleStart();
+      handleStart(); // 정지 상태면 시작
     }
   };
 
