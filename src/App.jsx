@@ -26,6 +26,10 @@ function App() {
   const prevIsRunning = useRef(isRunning);
   const prevIsStopwatch = useRef(isStopwatch);
   const isResetting = useRef(false);
+  const touchStartY = useRef(0);
+  const touchCurrentY = useRef(0);
+  const isDragging = useRef(false);
+  const dragThreshold = 10; // 드래그 판정 임계값 (픽셀)
   
   // 키보드 이벤트 후 터치 이벤트 간섭 방지
   const keyboardEventTime = useRef(0);
@@ -369,32 +373,124 @@ function App() {
     }, 0);
   };
 
-  const handleCanvasTouch = (e) => {
+  const handleTouchStart = (e) => {
     e.preventDefault();
     e.stopPropagation();
     
     const currentTime = Date.now();
     touchStartTime.current = currentTime;
     
-    // 키보드 이벤트 후 300ms 이내의 터치는 무시 (더 짧은 시간으로 조정)
+    // 키보드 이벤트 후 300ms 이내의 터치는 무시
     if (currentTime - keyboardEventTime.current < 300) {
       return;
     }
     
-    // 터치 이벤트가 발생했음을 표시
-    if (e.type === 'touchstart') {
-      e.target.setAttribute('data-touched', 'true');
+    // 타이머가 실행 중이면 드래그 비활성화
+    if (isRunning || isPaused) {
+      return;
     }
     
-    // 현재 상태에 따라 동작 결정
-    if (isRunning && !isPaused) {
-      handlePause(); // 실행 중이면 일시정지
-    } else if (isRunning && isPaused) {
-      handlePause(); // 일시정지 중이면 재시작 (handlePause에서 resume 처리)
-    } else {
-      handleStart(); // 정지 상태면 시작
+    // 터치 시작 위치 저장
+    const touch = e.touches[0];
+    touchStartY.current = touch.clientY;
+    touchCurrentY.current = touch.clientY;
+    isDragging.current = false;
+    
+    // 터치 이벤트가 발생했음을 표시
+    e.target.setAttribute('data-touched', 'true');
+  };
+
+  const handleTouchMove = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // 타이머가 실행 중이면 드래그 비활성화
+    if (isRunning || isPaused) {
+      return;
+    }
+    
+    const touch = e.touches[0];
+    touchCurrentY.current = touch.clientY;
+    
+    // 드래그 거리 계산
+    const deltaY = touchStartY.current - touchCurrentY.current;
+    
+    // 드래그 임계값을 넘으면 드래그 모드 활성화
+    if (Math.abs(deltaY) > dragThreshold) {
+      isDragging.current = true;
+      
+      // 드래그 거리에 따른 시간 조절 (30픽셀당 1분)
+      const dragSensitivity = 30;
+      const minutes = Math.floor(Math.abs(deltaY) / dragSensitivity);
+      
+      if (minutes > 0) {
+        let current = duration / 60;
+        let delta = deltaY > 0 ? 1 : -1; // 위로 드래그하면 증가, 아래로 드래그하면 감소
+        
+        // handleWheel 로직을 참고하여 1분 단위로 조절
+        if (current % 1 !== 0) {
+          // 현재 시간이 1분 단위가 아닐 때는 항상 올림/내림 처리 (초 단위 처리)
+          if (delta > 0) {
+            // 위로 드래그: 현재 시간보다 크면서 가장 작은 1분 단위 (올림)
+            current = Math.min(60, Math.ceil(current));
+          } else {
+            // 아래로 드래그: 현재 시간보다 작으면서 가장 큰 1분 단위 (내림)
+            current = Math.max(0, Math.floor(current));
+          }
+        } else {
+          // 1분 단위일 때는 드래그한 만큼 증감
+          current = Math.min(60, Math.max(0, current + delta * minutes));
+        }
+        
+        const newDuration = current * 60;
+        setDuration(newDuration);
+        setTimeLeft(newDuration);
+        const progress = 1;
+        drawTimer(progress, current / 60, isPaused);
+        
+        // 드래그 시작점 업데이트 (연속 드래그 처리)
+        touchStartY.current = touchCurrentY.current;
+      }
     }
   };
+
+  const handleTouchEnd = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const currentTime = Date.now();
+    
+    // 키보드 이벤트 후 300ms 이내의 터치는 무시
+    if (currentTime - keyboardEventTime.current < 300) {
+      return;
+    }
+    
+    // 드래그가 아닌 단순 터치인 경우에만 타이머 제어
+    if (!isDragging.current) {
+      // 현재 상태에 따라 동작 결정
+      if (isRunning && !isPaused) {
+        handlePause(); // 실행 중이면 일시정지
+      } else if (isRunning && isPaused) {
+        handlePause(); // 일시정지 중이면 재시작 (handlePause에서 resume 처리)
+      } else {
+        handleStart(); // 정지 상태면 시작
+      }
+    }
+    
+    // 드래그 상태 초기화
+    isDragging.current = false;
+    touchStartY.current = 0;
+    touchCurrentY.current = 0;
+  };
+
+  // 캔버스 이벤트 리스너 등록 시 사용할 이벤트들
+  // onTouchStart={handleTouchStart}
+  // onTouchMove={handleTouchMove}
+  // onTouchEnd={handleTouchEnd}
+  // onWheel={handleWheel}
+  // onClick={handleCanvasClick}
+
+  const handleCanvasTouch = handleTouchStart;
 
   const handleCanvasClick = (e) => {
     const currentTime = Date.now();
