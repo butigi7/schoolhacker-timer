@@ -50,3 +50,38 @@ canvas {
   font-size: 1.5rem;
   margin: 10px 0;
 }
+
+.fullscreen-btn {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  cursor: pointer;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.fullscreen-btn:focus {
+  outline: none;
+}
+
+.fullscreen-btn:hover {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.fullscreen-btn:active {
+  transform: scale(0.90);
+}
+
+.fullscreen-btn img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}

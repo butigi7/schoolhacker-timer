@@ -15,6 +15,7 @@ function App() {
   const [scrollStarted, setScrollStarted] = useState(false);
   const [isStopwatch, setIsStopwatch] = useState(false);
   const [originalDuration, setOriginalDuration] = useState(0); // 타이머 시작 시의 원래 설정 시간
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const requestRef = useRef(null);
   const startTimestamp = useRef(null);
@@ -23,6 +24,8 @@ function App() {
   const inputRef = useRef(null);
   const prevTimeLeft = useRef(timeLeft);
   const prevIsRunning = useRef(isRunning);
+  const prevIsStopwatch = useRef(isStopwatch);
+  const isResetting = useRef(false);
 
   const formatTime = (seconds) => {
     const total = Math.floor(seconds); // 👈 소수점 버림
@@ -32,11 +35,11 @@ function App() {
   };
 
   const handleInputChange = (e) => {
-    // 모바일에서 가상 키보드로 입력된 값 처리
     if (isRunning || isPaused) return;
     
     const input = e.target;
     const value = input.value;
+    const cursorPos = input.selectionStart;
     
     // 숫자와 콜론만 허용
     const cleaned = value.replace(/[^\d:]/g, '');
@@ -61,20 +64,31 @@ function App() {
         
         setDuration(total);
         setTimeLeft(total);
-        setDisplayValue(formatted);
         drawTimer(1, total / 3600, false);
+        
+        // 값이 변경되었을 때만 커서 위치 조정
+        if (input.value !== formatted) {
+          // 커서 위치를 먼저 저장한 후 값 설정
+          const savedStart = input.selectionStart;
+          const savedEnd = input.selectionEnd;
+          
+          input.value = formatted;
+          
+          // 즉시 커서 위치 복원 (깜빡임 방지)
+          input.setSelectionRange(savedStart, savedEnd);
+        }
       }
-      
-      input.value = formatted;
     }
   };
 
   const handleKeyDown = (e) => {
+    if (isRunning || isPaused) return;
+    
     const input = e.target;
     const selectionStart = input.selectionStart || 0;
-  
+
     // 숫자 입력 처리
-    if (/^\d$/.test(e.key) && !isRunning && !isPaused) {
+    if (/^\d$/.test(e.key)) {
       e.preventDefault();
       
       const pos = selectionStart;
@@ -121,7 +135,6 @@ function App() {
       
       setDuration(total);
       setTimeLeft(total);
-      setDisplayValue(formatted);
       drawTimer(1, total / 3600, false);
       
       // 다음 커서 위치 계산
@@ -138,16 +151,15 @@ function App() {
         nextPos = actualPos + 1;
       }
       
-      // 커서 위치 설정
-      requestAnimationFrame(() => {
-        input.selectionStart = input.selectionEnd = Math.min(nextPos, 5);
-      });
+      // 커서 위치 설정 - 즉시 적용으로 깜빡임 방지
+      const finalPos = Math.min(nextPos, 5);
+      input.setSelectionRange(finalPos, finalPos);
       
       return;
     }
-  
+
     // Backspace 처리
-    if (e.key === 'Backspace' && !isRunning && !isPaused) {
+    if (e.key === 'Backspace') {
       e.preventDefault();
       let raw = input.value.replace(/[^\d]/g, '').padStart(4, '0').split('');
       let idx = selectionStart < 3 ? selectionStart - 1 : selectionStart - 2;
@@ -155,23 +167,23 @@ function App() {
         raw[idx] = '0';
         const formatted = `${raw[0]}${raw[1]}:${raw[2]}${raw[3]}`;
         input.value = formatted;
-  
+
         const minutes = parseInt(raw[0] + raw[1], 10);
         const seconds = Math.min(parseInt(raw[2] + raw[3], 10), 59);
         const total = Math.min(3600, minutes * 60 + seconds);
-  
+
         setDuration(total);
         setTimeLeft(total);
-        setDisplayValue(formatted);
         drawTimer(1, total / 3600, false);
-  
-        // 커서 왼쪽으로 이동
-        requestAnimationFrame(() => {
-          input.selectionStart = input.selectionEnd = Math.max(selectionStart - 1 - (selectionStart === 3 ? 1 : 0), 0);
-        });
+
+        // 커서 왼쪽으로 이동 - 즉시 적용으로 깜빡임 방지
+        const newPos = Math.max(selectionStart - 1 - (selectionStart === 3 ? 1 : 0), 0);
+        input.setSelectionRange(newPos, newPos);
       }
     }
-    if (e.key === 'Enter' && !isRunning && !isPaused) {
+    
+    // Enter 키 처리
+    if (e.key === 'Enter') {
       e.preventDefault();
       if (duration > 0) {
         handleStart();
@@ -180,7 +192,7 @@ function App() {
     }
     
     // 모바일에서 가상 키보드의 '이동', '완료', '다음' 등의 키 처리
-    if ((e.key === 'Go' || e.key === 'Done' || e.key === 'Next' || e.keyCode === 13) && !isRunning && !isPaused) {
+    if ((e.key === 'Go' || e.key === 'Done' || e.key === 'Next' || e.keyCode === 13)) {
       e.preventDefault();
       if (duration > 0) {
         handleStart();
@@ -261,6 +273,18 @@ function App() {
     }
   };
 
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+      });
+    } else {
+      document.exitFullscreen().then(() => {
+        setIsFullscreen(false);
+      });
+    }
+  };
+
   const update = (timestamp, forcedStopwatch = isStopwatch) => {
     if (!startTimestamp.current) startTimestamp.current = timestamp;
   
@@ -325,20 +349,24 @@ function App() {
   };
 
   const handleReset = () => {
+    isResetting.current = true;  // 리셋 시작
     cancelAnimationFrame(requestRef.current);
     setIsRunning(false);
     setIsPaused(false);
     setIsStopwatch(false);
+    setScrollStarted(false);  // 스크롤 상태 초기화
     pausedElapsed.current = 0;
     
-    // 원래 설정 시간으로 복원
     const resetDuration = originalDuration || duration;
     setDuration(resetDuration);
     setTimeLeft(resetDuration);
   
-    // 원래 설정 시간 기준으로 게이지 그리기
     const maxProgress = resetDuration / 3600;
     drawTimer(1, maxProgress, false);
+    
+    setTimeout(() => {
+      isResetting.current = false;  // 리셋 완료
+    }, 0);
   };
   
 
@@ -348,20 +376,22 @@ function App() {
     let current = duration / 60;
     let delta = e.deltaY < 0 ? 1 : -1;
 
-    if (!scrollStarted && current % 5 !== 0) {
-      setScrollStarted(true);
+    // 현재 시간이 5분 단위가 아닐 때는 항상 올림/내림 처리
+    if (current % 5 !== 0) {
       if (delta > 0) {
-        current = Math.min(60, current + (5 - (current % 5)));
-        setScrollDirection('up');
+        // 업스크롤: 현재 시간보다 크면서 가장 작은 5분 단위
+        current = Math.min(60, Math.ceil(current / 5) * 5);
       } else {
-        current = Math.max(0, current - (current % 5));
-        setScrollDirection('down');
+        // 다운스크롤: 현재 시간보다 작으면서 가장 큰 5분 단위
+        current = Math.max(0, Math.floor(current / 5) * 5);
       }
     } else {
+      // 5분 단위일 때는 5분씩 증감
       current = Math.min(60, Math.max(0, current + delta * 5));
     }
     const newDuration = current * 60;
     setDuration(newDuration);
+    setTimeLeft(newDuration);
     const progress = 1;
     drawTimer(progress, current / 60, isPaused);
   };
@@ -369,10 +399,25 @@ function App() {
   useEffect(() => {
     drawTimer(0, 0, false); // 초기 로드 시 눈금만 그리기
   }, []);
+
+  // 전체화면 상태 변화 감지
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
   
   useEffect(() => {
-    // 이전에 실행 중이었고, 이전 timeLeft가 0보다 크고, 현재 timeLeft가 0일 때 알람 재생
-    if (prevIsRunning.current && prevTimeLeft.current > 0 && timeLeft === 0 && !isStopwatch) {
+    if (prevIsRunning.current && 
+        prevTimeLeft.current > 0 && 
+        timeLeft === 0 && 
+        !isStopwatch && 
+        !isResetting.current) {  // 리셋 중이 아닐 때만
       playAlarm();
     }
     prevTimeLeft.current = timeLeft;
@@ -391,10 +436,19 @@ function App() {
     }
   }, [isPaused]);
 
-
-
   return (
     <div className="container">
+      <button 
+        className="fullscreen-btn"
+        onClick={toggleFullscreen}
+        title={isFullscreen ? "전체화면 해제" : "전체화면"}
+      >
+        <img 
+          src={isFullscreen ? "/fullscreen.svg" : "/fullscreen.svg"} 
+          alt={isFullscreen ? "전체화면 해제" : "전체화면"}
+        />
+      </button>
+      
       <input
         ref={inputRef}
         className="time-input"
