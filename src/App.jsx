@@ -368,7 +368,15 @@ function App() {
       isResetting.current = false;  // 리셋 완료
     }, 0);
   };
-  
+
+  const handleCanvasTouch = (e) => {
+    e.preventDefault(); // 기본 동작 방지
+    if (isRunning) {
+      handlePause();
+    } else {
+      handleStart();
+    }
+  };
 
   const handleWheel = (e) => {
     if (isRunning || isPaused) return;
@@ -476,8 +484,11 @@ function App() {
         className="timer-canvas"
         width={400}
         height={400}
-        onClick={isRunning ? handlePause : handleStart}
+        onTouchStart={handleCanvasTouch}
+        onTouchEnd={(e) => e.preventDefault()}
+        onClick={handleCanvasTouch}
         onWheel={handleWheel}
+        style={{ touchAction: 'none' }}
       />
     </div>
   );
