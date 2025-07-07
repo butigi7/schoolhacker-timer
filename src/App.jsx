@@ -16,6 +16,7 @@ function App() {
   const [isStopwatch, setIsStopwatch] = useState(false);
   const [originalDuration, setOriginalDuration] = useState(0); // 타이머 시작 시의 원래 설정 시간
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isScrolling, setIsScrolling] = useState(false); // 스크롤 입력 중인지 확인
 
   const requestRef = useRef(null);
   const startTimestamp = useRef(null);
@@ -26,8 +27,8 @@ function App() {
   const prevIsRunning = useRef(isRunning);
   const prevIsStopwatch = useRef(isStopwatch);
   const isResetting = useRef(false);
-  const touchStartY = useRef(0);
-  const touchCurrentY = useRef(0);
+  const touchStartAngle = useRef(0);
+  const touchCurrentAngle = useRef(0);
   const isDragging = useRef(false);
   const dragThreshold = 10; // 드래그 판정 임계값 (픽셀)
   
@@ -43,6 +44,7 @@ function App() {
   };
 
   const handleInputChange = (e) => {
+    // 실행 중일 때는 입력란 직접 수정 불가 (스크롤 입력만 허용)
     if (isRunning || isPaused) return;
     
     const input = e.target;
@@ -90,6 +92,7 @@ function App() {
   };
 
   const handleKeyDown = (e) => {
+    // 실행 중일 때는 키보드 입력 불가 (스크롤 입력만 허용)
     if (isRunning || isPaused) return;
     
     const input = e.target;
@@ -178,6 +181,7 @@ function App() {
 
         const minutes = parseInt(raw[0] + raw[1], 10);
         const seconds = Math.min(parseInt(raw[2] + raw[3], 10), 59);
+
         const total = Math.min(3600, minutes * 60 + seconds);
 
         setDuration(total);
@@ -189,10 +193,11 @@ function App() {
         input.setSelectionRange(newPos, newPos);
       }
     }
-    
+
     // Enter 키 및 가상 키보드 버튼 처리
     if (e.key === 'Enter' || e.key === 'Go' || e.key === 'Done' || e.key === 'Next' || e.keyCode === 13) {
       e.preventDefault();
+
       keyboardEventTime.current = Date.now(); // 키보드 이벤트 시간 기록
       
       if (duration > 0) {
@@ -299,15 +304,21 @@ function App() {
       progress = current / 3600;
       maxProgress = 1;
       shouldContinue = current < 3600;
-      setTimeLeft(current);
+      if (!isScrolling) {
+        setTimeLeft(current);
+      }
     } else {
       const remaining = Math.max(duration - elapsed, 0);
       progress = remaining / duration;
       maxProgress = duration / 3600;
       shouldContinue = remaining > 0;
-      setTimeLeft(remaining);
+      if (!isScrolling) {
+        setTimeLeft(remaining);
+      }
     }
   
+    // update 함수에서는 isPaused 상태를 직접 사용하지 않고, 
+    // handlePause에서 재시작 시 명시적으로 false를 전달
     drawTimer(progress, maxProgress, false);
   
     if (shouldContinue) {
@@ -333,7 +344,7 @@ function App() {
       inputRef.current.blur();
     }
   
-    drawTimer(0, watchMode ? 1 : duration / 3600, false);
+    drawTimer(0, watchMode ? 1 : duration / 3600, isPaused);
   
     // ⬇️ watchMode 값을 넘김
     requestRef.current = requestAnimationFrame((ts) => update(ts, watchMode));
@@ -345,10 +356,26 @@ function App() {
       cancelAnimationFrame(requestRef.current);
       pausedElapsed.current += performance.now() - startTimestamp.current;
       setIsPaused(true);
+      
+      // 일시정지 시 즉시 색상 업데이트
+      const progress = isStopwatch ? timeLeft / 3600 : timeLeft / duration;
+      const maxProgress = isStopwatch ? 1 : duration / 3600;
+      drawTimer(progress, maxProgress, true);
     } else {
       setIsPaused(false);
-      startTimestamp.current = null;
-      requestRef.current = requestAnimationFrame(update);
+      // 재시작 시 pausedElapsed를 고려하여 startTimestamp 설정
+      startTimestamp.current = performance.now() - pausedElapsed.current;
+      pausedElapsed.current = 0; // 일시정지 해제 시 누적값 초기화
+      
+      // 재시작 시 즉시 색상 업데이트 (명시적으로 false 전달)
+      const progress = isStopwatch ? timeLeft / 3600 : timeLeft / duration;
+      const maxProgress = isStopwatch ? 1 : duration / 3600;
+      drawTimer(progress, maxProgress, false);
+      
+      // 약간의 지연 후 update 함수 시작 (상태 업데이트 완료 후)
+      setTimeout(() => {
+        requestRef.current = requestAnimationFrame(update);
+      }, 10);
     }
   };
 
@@ -366,11 +393,21 @@ function App() {
     setTimeLeft(resetDuration);
   
     const maxProgress = resetDuration / 3600;
-    drawTimer(1, maxProgress, false);
+    drawTimer(1, maxProgress, isPaused);
     
     setTimeout(() => {
       isResetting.current = false;  // 리셋 완료
     }, 0);
+  };
+
+  // 캔버스 중심에서 터치 위치까지의 각도 계산
+  const calculateAngle = (touch, canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const x = touch.clientX - cx;
+    const y = touch.clientY - cy;
+    return Math.atan2(y, x) * 180 / Math.PI;
   };
 
   const handleTouchStart = (e) => {
@@ -385,72 +422,82 @@ function App() {
       return;
     }
     
-    // 타이머가 실행 중이면 드래그 비활성화
-    if (isRunning || isPaused) {
-      return;
-    }
-    
-    // 터치 시작 위치 저장
+    // 터치 시작 위치 저장 (각도 기반)
     const touch = e.touches[0];
-    touchStartY.current = touch.clientY;
-    touchCurrentY.current = touch.clientY;
+    const canvas = canvasRef.current;
+    touchStartAngle.current = calculateAngle(touch, canvas);
+    touchCurrentAngle.current = touchStartAngle.current;
     isDragging.current = false;
     
     // 터치 이벤트가 발생했음을 표시
     e.target.setAttribute('data-touched', 'true');
+    
+    // 모바일에서 캔버스 터치 시 키패드 숨김
+    if (inputRef.current) {
+      inputRef.current.blur();
+    }
   };
 
   const handleTouchMove = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    // 타이머가 실행 중이면 드래그 비활성화
-    if (isRunning || isPaused) {
-      return;
-    }
-    
     const touch = e.touches[0];
-    touchCurrentY.current = touch.clientY;
-    
-    // 드래그 거리 계산
-    const deltaY = touchStartY.current - touchCurrentY.current;
-    
-    // 드래그 임계값을 넘으면 드래그 모드 활성화
-    if (Math.abs(deltaY) > dragThreshold) {
+    const canvas = canvasRef.current;
+    touchCurrentAngle.current = calculateAngle(touch, canvas);
+    const angleDiff = touchCurrentAngle.current - touchStartAngle.current;
+    let normalizedAngleDiff = angleDiff;
+    if (normalizedAngleDiff > 180) {
+      normalizedAngleDiff -= 360;
+    } else if (normalizedAngleDiff < -180) {
+      normalizedAngleDiff += 360;
+    }
+    if (Math.abs(normalizedAngleDiff) > 5) {
       isDragging.current = true;
-      
-      // 드래그 거리에 따른 시간 조절 (30픽셀당 1분)
-      const dragSensitivity = 30;
-      const minutes = Math.floor(Math.abs(deltaY) / dragSensitivity);
-      
-      if (minutes > 0) {
-        let current = duration / 60;
-        let delta = deltaY > 0 ? 1 : -1; // 위로 드래그하면 증가, 아래로 드래그하면 감소
-        
-        // handleWheel 로직을 참고하여 1분 단위로 조절
-        if (current % 1 !== 0) {
-          // 현재 시간이 1분 단위가 아닐 때는 항상 올림/내림 처리 (초 단위 처리)
-          if (delta > 0) {
-            // 위로 드래그: 현재 시간보다 크면서 가장 작은 1분 단위 (올림)
-            current = Math.min(60, Math.ceil(current));
-          } else {
-            // 아래로 드래그: 현재 시간보다 작으면서 가장 큰 1분 단위 (내림)
-            current = Math.max(0, Math.floor(current));
+      const delta = normalizedAngleDiff > 0 ? 1 : -1;
+      if (isRunning || isPaused) {
+        setIsScrolling(true);
+        const currentSeconds = timeLeft;
+        const newSeconds = Math.min(3600, Math.max(0, currentSeconds + delta * 60));
+        if (!isStopwatch) {
+          // duration은 유지하고 timeLeft만 조정
+          setTimeLeft(newSeconds);
+          // 경과 시간 보정
+          if (isPaused) {
+            // 일시정지 상태에서는 pausedElapsed 업데이트
+            // pausedElapsed는 일시정지 시점까지의 경과 시간 + 스크롤로 조정된 시간
+            const totalElapsed = duration - newSeconds;
+            pausedElapsed.current = totalElapsed * 1000;
+          } else if (startTimestamp.current) {
+            // 실행 중에는 startTimestamp 보정
+            const newElapsed = duration - newSeconds;
+            startTimestamp.current = performance.now() - (newElapsed * 1000);
           }
         } else {
-          // 1분 단위일 때는 드래그한 만큼 증감
-          current = Math.min(60, Math.max(0, current + delta * minutes));
+          setTimeLeft(newSeconds);
         }
-        
-        const newDuration = current * 60;
+        const progress = isStopwatch ? newSeconds / 3600 : newSeconds / (newSeconds || 1);
+        drawTimer(progress, isStopwatch ? 1 : newSeconds / 3600, isPaused);
+        setTimeout(() => {
+          setIsScrolling(false);
+        }, 100);
+      } else {
+        let currentMinutes = duration / 60;
+        if (currentMinutes % 1 !== 0) {
+          if (delta > 0) {
+            currentMinutes = Math.min(60, Math.ceil(currentMinutes));
+          } else {
+            currentMinutes = Math.max(0, Math.floor(currentMinutes));
+          }
+        } else {
+          currentMinutes = Math.min(60, Math.max(0, currentMinutes + delta));
+        }
+        const newDuration = currentMinutes * 60;
         setDuration(newDuration);
         setTimeLeft(newDuration);
         const progress = 1;
-        drawTimer(progress, current / 60, isPaused);
-        
-        // 드래그 시작점 업데이트 (연속 드래그 처리)
-        touchStartY.current = touchCurrentY.current;
+        drawTimer(progress, currentMinutes / 60, isPaused);
       }
+      touchStartAngle.current = touchCurrentAngle.current;
     }
   };
 
@@ -479,8 +526,8 @@ function App() {
     
     // 드래그 상태 초기화
     isDragging.current = false;
-    touchStartY.current = 0;
-    touchCurrentY.current = 0;
+    touchStartAngle.current = 0;
+    touchCurrentAngle.current = 0;
   };
 
   // 캔버스 이벤트 리스너 등록 시 사용할 이벤트들
@@ -525,31 +572,53 @@ function App() {
   };
 
   const handleWheel = (e) => {
-    if (isRunning || isPaused) return;
-
-    let current = duration / 60;
     let delta = e.deltaY < 0 ? 1 : -1;
 
-    // 현재 시간이 5분 단위가 아닐 때는 항상 올림/내림 처리
-    if (current % 5 !== 0) {
-      if (delta > 0) {
-        // 업스크롤: 현재 시간보다 크면서 가장 작은 5분 단위
-        current = Math.min(60, Math.ceil(current / 5) * 5);
-      } else {
-        // 다운스크롤: 현재 시간보다 작으면서 가장 큰 5분 단위
-        current = Math.max(0, Math.floor(current / 5) * 5);
-      }
+    // 1분 단위로 조절
+    if (isRunning || isPaused) {
+      setIsScrolling(true);
+      const currentSeconds = timeLeft;
+      const newSeconds = Math.min(3600, Math.max(0, currentSeconds + delta * 60));
+              if (!isStopwatch) {
+          // duration은 유지하고 timeLeft만 조정
+          setTimeLeft(newSeconds);
+          // 경과 시간 보정
+          if (isPaused) {
+            // 일시정지 상태에서는 pausedElapsed 업데이트
+            // pausedElapsed는 일시정지 시점까지의 경과 시간 + 스크롤로 조정된 시간
+            const totalElapsed = duration - newSeconds;
+            pausedElapsed.current = totalElapsed * 1000;
+          } else if (startTimestamp.current) {
+            // 실행 중에는 startTimestamp 보정
+            const newElapsed = duration - newSeconds;
+            startTimestamp.current = performance.now() - (newElapsed * 1000);
+          }
+        } else {
+          setTimeLeft(newSeconds);
+        }
+      const progress = isStopwatch ? newSeconds / 3600 : newSeconds / duration;
+      drawTimer(progress, isStopwatch ? 1 : duration / 3600, isPaused);
+      setTimeout(() => {
+        setIsScrolling(false);
+      }, 100);
     } else {
-      // 5분 단위일 때는 5분씩 증감
-      current = Math.min(60, Math.max(0, current + delta * 5));
+      let current = duration / 60;
+      if (current % 1 !== 0) {
+        if (delta > 0) {
+          current = Math.min(60, Math.ceil(current));
+        } else {
+          current = Math.max(0, Math.floor(current));
+        }
+      } else {
+        current = Math.min(60, Math.max(0, current + delta));
+      }
+      const newDuration = current * 60;
+      setDuration(newDuration);
+      setTimeLeft(newDuration);
+      const progress = 1;
+      drawTimer(progress, current / 60, isPaused);
     }
-    const newDuration = current * 60;
-    setDuration(newDuration);
-    setTimeLeft(newDuration);
-    const progress = 1;
-    drawTimer(progress, current / 60, isPaused);
   };
-
 
   useEffect(() => {
     drawTimer(0, 0, false); // 초기 로드 시 눈금만 그리기
@@ -579,17 +648,18 @@ function App() {
     prevIsRunning.current = isRunning;
   }, [timeLeft, isRunning, isStopwatch]);
 
-  useEffect(() => {
-    if (isRunning) {
-      const progress = isStopwatch
-        ? timeLeft / 3600
-        : timeLeft / duration;
-      const maxProgress = isStopwatch
-        ? 1
-        : duration / 3600;
-      drawTimer(progress, maxProgress, isPaused);
-    }
-  }, [isPaused]);
+  // isPaused 변경 시 drawTimer 호출 제거 - 스크롤 입력 시 간섭 방지
+  // useEffect(() => {
+  //   if (isRunning && !isPaused) {
+  //     const progress = isStopwatch
+  //       ? timeLeft / 3600
+  //       : timeLeft / duration;
+  //     const maxProgress = isStopwatch
+  //       ? 1
+  //       : duration / 3600;
+  //     drawTimer(progress, maxProgress, false);
+  //   }
+  // }, [isPaused]);
 
   return (
     <div className="container">
