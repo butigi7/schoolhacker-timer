@@ -550,6 +550,7 @@ function App() {
     drawTimer(progress, current / 60, isPaused);
   };
 
+
   useEffect(() => {
     drawTimer(0, 0, false); // 초기 로드 시 눈금만 그리기
   }, []);
@@ -630,11 +631,9 @@ function App() {
         className="timer-canvas"
         width={400}
         height={400}
-        onTouchStart={handleCanvasTouch}
-        onTouchEnd={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         onClick={handleCanvasClick}
         onWheel={handleWheel}
         style={{ 
