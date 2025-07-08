@@ -7,7 +7,6 @@ function playAlarm() {
 }
 
 function App() {
-  
   const [duration, setDuration] = useState(0); // 초 단위
   const [timeLeft, setTimeLeft] = useState(0); // 초 단위
   const [isRunning, setIsRunning] = useState(false);
@@ -16,7 +15,6 @@ function App() {
   const [isStopwatch, setIsStopwatch] = useState(false);
   const [originalDuration, setOriginalDuration] = useState(0); // 타이머 시작 시의 원래 설정 시간
   const [isFullscreen, setIsFullscreen] = useState(false);
-
 
   const requestRef = useRef(null);
   const startTimestamp = useRef(null);
@@ -41,6 +39,14 @@ function App() {
     const m = String(Math.floor(total / 60)).padStart(2, '0');
     const s = String(total % 60).padStart(2, '0');
     return `${m}:${s}`;
+  };
+
+  const formatStopwatchTime = (seconds) => {
+    const total = Math.floor(seconds);
+    const m = String(Math.floor(total / 60)).padStart(2, '0');
+    const s = String(total % 60).padStart(2, '0');
+    const ms = String(Math.floor((seconds - total) * 100)).padStart(2, '0');
+    return `${m}:${s}.${ms}`;
   };
 
   const handleInputChange = (e) => {
@@ -193,7 +199,7 @@ function App() {
         input.setSelectionRange(newPos, newPos);
       }
     }
-
+    
     // Enter 키 및 가상 키보드 버튼 처리
     if (e.key === 'Enter' || e.key === 'Go' || e.key === 'Done' || e.key === 'Next' || e.keyCode === 13) {
       e.preventDefault();
@@ -290,6 +296,13 @@ function App() {
   };
 
   const update = (timestamp, forcedStopwatch = isStopwatch) => {
+    if (wasForcedToZero.current) {
+      setTimeLeft(0);
+      setDuration(0);
+      drawTimer(0, 0, false);
+      setIsRunning(false);
+      return;
+    }
     if (!startTimestamp.current) startTimestamp.current = timestamp;
   
     const elapsed = (timestamp - startTimestamp.current + pausedElapsed.current) / 1000;
@@ -368,7 +381,7 @@ function App() {
       
       // 약간의 지연 후 update 함수 시작 (상태 업데이트 완료 후)
       setTimeout(() => {
-        requestRef.current = requestAnimationFrame(update);
+      requestRef.current = requestAnimationFrame(update);
       }, 10);
     }
   };
@@ -380,14 +393,20 @@ function App() {
     setIsPaused(false);
     setIsStopwatch(false);
     pausedElapsed.current = 0;
-    
-    const resetDuration = originalDuration || duration;
-    setDuration(resetDuration);
-    setTimeLeft(resetDuration);
-  
-    const maxProgress = resetDuration / 3600;
-    drawTimer(1, maxProgress, isPaused);
-    
+
+    if (wasForcedToZero.current) {
+      setTimeLeft(0);
+      setDuration(0);
+      wasForcedToZero.current = false;
+      drawTimer(0, 0, isPaused);
+    } else {
+      const resetDuration = originalDuration || duration;
+      setDuration(resetDuration);
+      setTimeLeft(resetDuration);
+      const maxProgress = resetDuration / 3600;
+      drawTimer(1, maxProgress, isPaused);
+    }
+
     setTimeout(() => {
       isResetting.current = false;  // 리셋 완료
     }, 0);
@@ -434,6 +453,12 @@ function App() {
   const handleTouchMove = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    // 스톱워치 실행/일시정지 중에는 스크롤 입력 무시
+    if (isStopwatch && (isRunning || isPaused)) {
+      return;
+    }
+    
     const touch = e.touches[0];
     const canvas = canvasRef.current;
     touchCurrentAngle.current = calculateAngle(touch, canvas);
@@ -467,6 +492,9 @@ function App() {
         if (!isStopwatch) {
           // duration은 유지하고 timeLeft만 조정
           setTimeLeft(newSeconds);
+          if (newSeconds === 0) {
+            wasForcedToZero.current = true;
+          }
           // 경과 시간 보정
           if (isPaused) {
             // 일시정지 상태에서는 pausedElapsed 업데이트
@@ -576,6 +604,11 @@ function App() {
   const handleWheel = (e) => {
     let delta = e.deltaY < 0 ? 1 : -1;
 
+    // 스톱워치 실행/일시정지 중에는 스크롤 입력 무시
+    if (isStopwatch && (isRunning || isPaused)) {
+      return;
+    }
+
     // 1분 단위로 조절
     if (isRunning || isPaused) {
       // 현재 시간을 직접 계산하여 즉시 반영
@@ -597,6 +630,9 @@ function App() {
       if (!isStopwatch) {
         // duration은 유지하고 timeLeft만 조정
         setTimeLeft(newSeconds);
+        if (newSeconds === 0) {
+          wasForcedToZero.current = true;
+        }
         // 경과 시간 보정
         if (isPaused) {
           // 일시정지 상태에서는 pausedElapsed 업데이트
@@ -622,12 +658,12 @@ function App() {
         }
       } else {
         current = Math.min(60, Math.max(0, current + delta));
-      }
-      const newDuration = current * 60;
-      setDuration(newDuration);
-      setTimeLeft(newDuration);
-      const progress = 1;
-      drawTimer(progress, current / 60, isPaused);
+    }
+    const newDuration = current * 60;
+    setDuration(newDuration);
+    setTimeLeft(newDuration);
+    const progress = 1;
+    drawTimer(progress, current / 60, isPaused);
     }
   };
 
@@ -647,13 +683,28 @@ function App() {
     };
   }, []);
   
+  const wasForcedToZero = useRef(false);
+  
   useEffect(() => {
     if (prevIsRunning.current && 
         prevTimeLeft.current > 0 && 
         timeLeft === 0 && 
         !isStopwatch && 
         !isResetting.current) {  // 리셋 중이 아닐 때만
+      if (wasForcedToZero.current) {
+        wasForcedToZero.current = false;
+        setIsRunning(false);
+        setIsPaused(false);
+        setIsStopwatch(false);
+        setTimeLeft(0);
+        if (requestRef.current) {
+          cancelAnimationFrame(requestRef.current);
+        }
+        drawTimer(0, 0, false);
+      } else {
       playAlarm();
+        setTimeout(() => handleReset(), 0);
+      }
     }
     prevTimeLeft.current = timeLeft;
     prevIsRunning.current = isRunning;
@@ -685,17 +736,23 @@ function App() {
         />
       </button>
       
+      <div className="center-wrap">
+        <div className="time-input-container">
       <input
         ref={inputRef}
-        className="time-input"
+            className={`time-input ${isStopwatch && isRunning ? 'stopwatch' : ''}`}
         type="text"
         inputMode="numeric"
         pattern="[0-9]*"
-        value={formatTime(isRunning || isPaused ? timeLeft : duration)}
+            value={isStopwatch && isRunning ? formatTime(timeLeft) : formatTime(isRunning || isPaused ? timeLeft : duration)}
         onInput={handleInputChange}
         onKeyDown={handleKeyDown}
         onWheel={handleWheel}
         onClick={() => {
+              if (wasForcedToZero.current) {
+                // 스크롤로 0초가 된 상태에서는 아무 동작도 하지 않음
+                return;
+              }
           if (isRunning || isPaused) {
             handleReset();
           } else if (duration === 0 && timeLeft === 0) {
@@ -704,8 +761,14 @@ function App() {
             drawTimer(0, 0, false); // 눈금만 그리기
           }
         }}
-        
-      />
+          />
+          {isStopwatch && isRunning && (
+            <span className="milliseconds">
+              .{String(Math.floor((timeLeft - Math.floor(timeLeft)) * 100)).padStart(2, '0')}
+            </span>
+          )}
+        </div>
+      </div>
 
       <canvas
         ref={canvasRef}

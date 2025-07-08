@@ -21,6 +21,18 @@ body, #root {
   color: black;
 }
 
+.time-input-container {
+  display: inline-flex;
+  align-items: center;
+  /* gap: 0; // 필요시 */
+}
+
+.center-wrap {
+  display: block;
+  width: fit-content;
+  margin: 0 auto;
+}
+
 .time-input {
   appearance: none;
   border: 1px solid transparent;
@@ -32,8 +44,21 @@ body, #root {
   width: 300px;
   text-align: center;
   height: 120px;
-  margin-top: 5px;
-  margin-bottom: 20px;
+  transition: width 0.3s ease;
+}
+
+.time-input.stopwatch {
+  width: 300px; /* 밀리초 부분이 별도 요소로 분리되어 원래 크기 유지 */
+}
+
+.milliseconds {
+  color: #ccc;
+  font-size: 4.8rem;
+  line-height: 120px;
+  margin-left: -35px;
+  padding-right: 35px; /* 입력란의 패딩만큼 오른쪽에 여백 추가 */
+  pointer-events: none;
+  user-select: none;
 }
 
 canvas {
