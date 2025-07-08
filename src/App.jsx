@@ -16,7 +16,7 @@ function App() {
   const [isStopwatch, setIsStopwatch] = useState(false);
   const [originalDuration, setOriginalDuration] = useState(0); // 타이머 시작 시의 원래 설정 시간
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isScrolling, setIsScrolling] = useState(false); // 스크롤 입력 중인지 확인
+
 
   const requestRef = useRef(null);
   const startTimestamp = useRef(null);
@@ -304,21 +304,15 @@ function App() {
       progress = current / 3600;
       maxProgress = 1;
       shouldContinue = current < 3600;
-      if (!isScrolling) {
-        setTimeLeft(current);
-      }
+      setTimeLeft(current);
     } else {
       const remaining = Math.max(duration - elapsed, 0);
       progress = remaining / duration;
       maxProgress = duration / 3600;
       shouldContinue = remaining > 0;
-      if (!isScrolling) {
-        setTimeLeft(remaining);
-      }
+      setTimeLeft(remaining);
     }
   
-    // update 함수에서는 isPaused 상태를 직접 사용하지 않고, 
-    // handlePause에서 재시작 시 명시적으로 false를 전달
     drawTimer(progress, maxProgress, false);
   
     if (shouldContinue) {
@@ -385,7 +379,6 @@ function App() {
     setIsRunning(false);
     setIsPaused(false);
     setIsStopwatch(false);
-    setScrollStarted(false);  // 스크롤 상태 초기화
     pausedElapsed.current = 0;
     
     const resetDuration = originalDuration || duration;
@@ -455,31 +448,40 @@ function App() {
       isDragging.current = true;
       const delta = normalizedAngleDiff > 0 ? 1 : -1;
       if (isRunning || isPaused) {
-        setIsScrolling(true);
-        const currentSeconds = timeLeft;
+        // 현재 시간을 직접 계산하여 즉시 반영
+        const currentTime = performance.now();
+        let currentSeconds;
+        
+        if (isPaused) {
+          // 일시정지 상태에서는 pausedElapsed로 계산
+          const elapsedSeconds = pausedElapsed.current / 1000;
+          currentSeconds = Math.max(0, duration - elapsedSeconds);
+        } else {
+          // 실행 중에는 startTimestamp로 계산
+          const elapsedSeconds = (currentTime - startTimestamp.current) / 1000;
+          currentSeconds = Math.max(0, duration - elapsedSeconds);
+        }
+        
         const newSeconds = Math.min(3600, Math.max(0, currentSeconds + delta * 60));
+        
         if (!isStopwatch) {
           // duration은 유지하고 timeLeft만 조정
           setTimeLeft(newSeconds);
           // 경과 시간 보정
           if (isPaused) {
             // 일시정지 상태에서는 pausedElapsed 업데이트
-            // pausedElapsed는 일시정지 시점까지의 경과 시간 + 스크롤로 조정된 시간
             const totalElapsed = duration - newSeconds;
             pausedElapsed.current = totalElapsed * 1000;
           } else if (startTimestamp.current) {
             // 실행 중에는 startTimestamp 보정
             const newElapsed = duration - newSeconds;
-            startTimestamp.current = performance.now() - (newElapsed * 1000);
+            startTimestamp.current = currentTime - (newElapsed * 1000);
           }
         } else {
           setTimeLeft(newSeconds);
         }
-        const progress = isStopwatch ? newSeconds / 3600 : newSeconds / (newSeconds || 1);
-        drawTimer(progress, isStopwatch ? 1 : newSeconds / 3600, isPaused);
-        setTimeout(() => {
-          setIsScrolling(false);
-        }, 100);
+        const progress = isStopwatch ? newSeconds / 3600 : newSeconds / duration;
+        drawTimer(progress, isStopwatch ? 1 : duration / 3600, isPaused);
       } else {
         let currentMinutes = duration / 60;
         if (currentMinutes % 1 !== 0) {
@@ -576,31 +578,40 @@ function App() {
 
     // 1분 단위로 조절
     if (isRunning || isPaused) {
-      setIsScrolling(true);
-      const currentSeconds = timeLeft;
+      // 현재 시간을 직접 계산하여 즉시 반영
+      const currentTime = performance.now();
+      let currentSeconds;
+      
+      if (isPaused) {
+        // 일시정지 상태에서는 pausedElapsed로 계산
+        const elapsedSeconds = pausedElapsed.current / 1000;
+        currentSeconds = Math.max(0, duration - elapsedSeconds);
+      } else {
+        // 실행 중에는 startTimestamp로 계산
+        const elapsedSeconds = (currentTime - startTimestamp.current) / 1000;
+        currentSeconds = Math.max(0, duration - elapsedSeconds);
+      }
+      
       const newSeconds = Math.min(3600, Math.max(0, currentSeconds + delta * 60));
-              if (!isStopwatch) {
-          // duration은 유지하고 timeLeft만 조정
-          setTimeLeft(newSeconds);
-          // 경과 시간 보정
-          if (isPaused) {
-            // 일시정지 상태에서는 pausedElapsed 업데이트
-            // pausedElapsed는 일시정지 시점까지의 경과 시간 + 스크롤로 조정된 시간
-            const totalElapsed = duration - newSeconds;
-            pausedElapsed.current = totalElapsed * 1000;
-          } else if (startTimestamp.current) {
-            // 실행 중에는 startTimestamp 보정
-            const newElapsed = duration - newSeconds;
-            startTimestamp.current = performance.now() - (newElapsed * 1000);
-          }
-        } else {
-          setTimeLeft(newSeconds);
+      
+      if (!isStopwatch) {
+        // duration은 유지하고 timeLeft만 조정
+        setTimeLeft(newSeconds);
+        // 경과 시간 보정
+        if (isPaused) {
+          // 일시정지 상태에서는 pausedElapsed 업데이트
+          const totalElapsed = duration - newSeconds;
+          pausedElapsed.current = totalElapsed * 1000;
+        } else if (startTimestamp.current) {
+          // 실행 중에는 startTimestamp 보정
+          const newElapsed = duration - newSeconds;
+          startTimestamp.current = currentTime - (newElapsed * 1000);
         }
+      } else {
+        setTimeLeft(newSeconds);
+      }
       const progress = isStopwatch ? newSeconds / 3600 : newSeconds / duration;
       drawTimer(progress, isStopwatch ? 1 : duration / 3600, isPaused);
-      setTimeout(() => {
-        setIsScrolling(false);
-      }, 100);
     } else {
       let current = duration / 60;
       if (current % 1 !== 0) {
